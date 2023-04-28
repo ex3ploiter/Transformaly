@@ -44,7 +44,7 @@ if __name__ == '__main__':
         _classes = range(20)
     elif args['dataset'] == 'cats_vs_dogs':
         _classes = range(2)   
-    elif args['dataset'] == '‌BrainMRI':
+    elif args['dataset'] == 'BrainMRI':
         _classes = range(4)
     elif args['dataset'] == 'dior':
         _classes = range(19)
@@ -74,6 +74,8 @@ if __name__ == '__main__':
 
 
     for _class in _classes:
+        if _class!=2 and args['dataset'] == 'BrainMRI':
+            continue
         print_and_add_to_log("===================================", logging)
         print_and_add_to_log(f"Class is : {_class}", logging)
         print_and_add_to_log("===================================", logging)
