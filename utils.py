@@ -127,6 +127,10 @@ def extract_fetures(base_path,
         else:
             _classes = range(number_of_classes)
 
+        
+        if dataset=='BrainMRI':
+            _classes=[2]
+        
         for _class in _classes:
 
             # config
@@ -575,6 +579,9 @@ def get_number_of_classes(dataset):
     elif dataset == 'cats_vs_dogs':
         number_of_classes = 2
 
+    elif dataset == 'BrainMRI':
+        number_of_classes = 4
+    
     elif dataset == 'dior':
         number_of_classes = 19
 
@@ -654,6 +661,12 @@ def get_datasets(dataset, data_path, val_transforms):
                                transform=val_transforms)
         testset = ImageFolder(root=data_path,
                               transform=val_transforms)
+        
+    elif dataset == 'BrainMRI':
+        trainset = ImageFolder(root='../Training', transform=val_transforms)
+        
+        testset = ImageFolder(root='../Testing', transform=val_transforms)
+                
 
     else:
         raise ValueError(f"{dataset} not supported yet!")
