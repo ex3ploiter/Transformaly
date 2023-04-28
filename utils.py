@@ -254,6 +254,7 @@ def extract_fetures(base_path,
                     print_and_add_to_log("Calculate KNN score", logging)
                     distances = knn_score(train_features, test_features, n_neighbours=2)
                     auc = roc_auc_score(anomaly_targets, distances)
+                    print("\nAUC : ",auc,"\n")
                     print_and_add_to_log(auc, logging)
 
 
