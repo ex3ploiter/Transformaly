@@ -43,7 +43,9 @@ if __name__ == '__main__':
     elif args['dataset'] == 'cifar100':
         _classes = range(20)
     elif args['dataset'] == 'cats_vs_dogs':
-        _classes = range(2)
+        _classes = range(2)   
+    elif args['dataset'] == '‌BrainMRI':
+        _classes = range(4)
     elif args['dataset'] == 'dior':
         _classes = range(19)
     else:

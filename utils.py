@@ -582,6 +582,9 @@ def get_number_of_classes(dataset):
     elif dataset == 'BrainMRI':
         number_of_classes = 4
     
+    elif dataset == '‌BrainMRI':
+        number_of_classes = 4
+    
     elif dataset == 'dior':
         number_of_classes = 19
 
