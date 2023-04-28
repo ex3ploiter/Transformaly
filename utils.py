@@ -144,7 +144,7 @@ def extract_fetures(base_path,
                 print_and_add_to_log(f"Unimodal setting: {unimodal}", logging)
 
                 assert dataset in ['cifar10', 'cifar100', 'fmnist', 'cats_vs_dogs',
-                                   'dior'], f"{dataset} not supported yet!"
+                                   'dior','BrainMRI'], f"{dataset} not supported yet!"
                 if unimodal:
                     base_feature_path = join(base_path, f'unimodal/{dataset}/class_{str(_class)}')
                 else:
