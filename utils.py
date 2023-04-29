@@ -128,9 +128,11 @@ def extract_fetures(base_path,
             _classes = range(number_of_classes)
 
         
-        if dataset=='BrainMRI':
-            _classes=[2]
-        
+        # if dataset=='BrainMRI':
+        #     _classes=[2]
+        # elif dataset=='X-ray':
+        #     _classes=[0]
+
         for _class in _classes:
 
             # config
@@ -144,7 +146,7 @@ def extract_fetures(base_path,
                 print_and_add_to_log(f"Unimodal setting: {unimodal}", logging)
 
                 assert dataset in ['cifar10', 'cifar100', 'fmnist', 'cats_vs_dogs',
-                                   'dior','BrainMRI'], f"{dataset} not supported yet!"
+                                   'dior','BrainMRI','X-ray'], f"{dataset} not supported yet!"
                 if unimodal:
                     base_feature_path = join(base_path, f'unimodal/{dataset}/class_{str(_class)}')
                 else:
@@ -583,8 +585,9 @@ def get_number_of_classes(dataset):
     elif dataset == 'BrainMRI':
         number_of_classes = 4
     
-    elif dataset == '‌BrainMRI':
-        number_of_classes = 4
+    elif dataset == 'X-ray':
+        number_of_classes = 2 
+    
     
     elif dataset == 'dior':
         number_of_classes = 19
@@ -670,6 +673,11 @@ def get_datasets(dataset, data_path, val_transforms):
         trainset = ImageFolder(root='../Training', transform=val_transforms)
         
         testset = ImageFolder(root='../Testing', transform=val_transforms)
+
+    elif dataset == 'X-ray':
+        trainset = ImageFolder(root='../chest_xray/train', transform=val_transforms)
+        
+        testset = ImageFolder(root='../chest_xray/test', transform=val_transforms)        
                 
 
     else:
