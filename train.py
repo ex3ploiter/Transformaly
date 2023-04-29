@@ -50,6 +50,9 @@ if __name__ == '__main__':
     
     elif args['dataset'] == 'X-ray':
         _classes = range(2)
+    elif args['dataset'] == 'Head-CT':
+        _classes = range(2)
+
 
     elif args['dataset'] == 'dior':
         _classes = range(19)
@@ -81,8 +84,12 @@ if __name__ == '__main__':
     for _class in _classes:
         if _class!=2 and args['dataset'] == 'BrainMRI':
             continue
+        
         elif _class!=0 and args['dataset'] == 'X-ray':
             continue  
+        
+        elif _class!=1 and args['dataset'] == 'Head-CT':
+            continue 
 
         print_and_add_to_log("===================================", logging)
         print_and_add_to_log(f"Class is : {_class}", logging)
