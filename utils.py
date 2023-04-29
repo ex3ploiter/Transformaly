@@ -687,7 +687,9 @@ def get_datasets(dataset, data_path, val_transforms):
 
     elif dataset == 'Head-CT':
         trainset = ImageFolder(root='../head_ct/Train/', transform=val_transforms)
-        testset = ImageFolder(root='../head_ct/Test', transform=val_transforms)        
+        testset = ImageFolder(root='../head_ct/Test/', transform=val_transforms)        
+
+        
 
     else:
         raise ValueError(f"{dataset} not supported yet!")
