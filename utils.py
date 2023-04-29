@@ -24,6 +24,8 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from torchvision.datasets import CIFAR10, CIFAR100, FashionMNIST, ImageFolder
 from torchvision.transforms import Compose
+import torchattacks
+import torchvision
 
 
 class DiorDataset(Dataset):
@@ -69,12 +71,133 @@ def knn_score(train_set, test_set, n_neighbours=2):
     return np.sum(dist, axis=1)
 
 
-def get_features(model, data_loader, early_break=-1):
+
+
+def train_model_blackbox(epoch, model, trainloader, device): 
+    model.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+    criterion = nn.CrossEntropyLoss()
+
+    soft = torch.nn.Softmax(dim=1)
+
+    preds = []
+    anomaly_scores = []
+    true_labels = []
+    running_loss = 0
+    accuracy = 0
+
+    
+    with tqdm(trainloader, unit="batch") as tepoch:
+        torch.cuda.empty_cache()
+        for i, (data, targets) in enumerate(tepoch):
+            tepoch.set_description(f"Epoch {epoch + 1}")
+            data, targets = data.to(device), targets.to(device)
+
+            optimizer.zero_grad()
+
+            outputs = model(data)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+            true_labels += targets.detach().cpu().numpy().tolist()
+
+            predictions = outputs.argmax(dim=1, keepdim=True).squeeze()
+            preds += predictions.detach().cpu().numpy().tolist()
+            correct = (torch.tensor(preds) == torch.tensor(true_labels)).sum().item()
+            accuracy = correct / len(preds)
+
+            probs = soft(outputs).squeeze()
+            anomaly_scores += probs[:, 1].detach().cpu().numpy().tolist()
+
+            running_loss += loss.item() * data.size(0)
+
+            tepoch.set_postfix(loss=running_loss / len(preds), accuracy=100. * accuracy)
+
+        print("AUC : ",roc_auc_score(true_labels, anomaly_scores) )
+        print("accuracy_score : ",accuracy_score(true_labels, preds, normalize=True) )
+
+    return  model
+
+
+
+
+class BB_Model(torch.nn.Module):
+    def __init__(self, backbone):
+        super().__init__()
+
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+
+        mu = torch.tensor(mean).view(3,1,1).cuda()
+        std = torch.tensor(std).view(3,1,1).cuda()        
+        self.norm = lambda x: ( x - mu ) / std
+        if backbone == 152:
+            self.backbone = torchvision.models.resnet152(pretrained=True)
+        else:
+            self.backbone = torchvision.models.resnet18(pretrained=True)
+        self.fc1=nn.Linear(1000,2)        
+    def forward(self, x):
+        x = self.norm(x)
+        z1 = self.backbone(x)
+        z1=self.fc1(z1)
+        return z1
+    
+def get_loaders_blackbox(dataset, batch_size=32,transform):
+    
+    if dataset == "BrainMRI" : # 2
+        path1='/mnt/new_drive/Masoud_WorkDir/MeanShift_Tests/Training'
+        path2='/mnt/new_drive/Masoud_WorkDir/MeanShift_Tests/Testing'
+        label_class=2
+    elif dataset == "X-ray" : # 0
+        path1='/mnt/new_drive/Sepehr/chest_xray/train'
+        path2='/mnt/new_drive/Sepehr/chest_xray/test'
+        label_class=0
+
+    elif dataset == "Head-CT" :# 1
+        path1='/mnt/new_drive/Masoud_WorkDir/Transformaly_Test/head_ct/Train/'
+        path2='/mnt/new_drive/Masoud_WorkDir/Transformaly_Test/head_ct/Test/'
+        label_class=1
+    
+    
+    trainset = ImageFolder(root=path1, transform=transform)
+    testset = ImageFolder(root=path2, transform=transform)
+
+    
+    trainset.samples=[(pth,int(target!=label_class)) for (pth,target) in trainset.samples]
+    testset.samples=[(pth,int(target!=label_class)) for (pth,target) in testset.samples ]
+
+
+    ds=torch.utils.data.ConcatDataset([trainset, testset])
+    train_loader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=True, num_workers=2)
+
+    return train_loader
+
+
+def prepareBB(datasetName,transform):
+    model_blackbox=BB_Model(18)
+    model_blackbox = model_blackbox.cuda()
+    train_loader_blackbox = get_loaders_blackbox(dataset=datasetName,transform=transform)
+    
+    for epoch in range(10):
+        model_blackbox=train_model_blackbox(epoch,model_blackbox, train_loader_blackbox, 'cuda')    
+
+    return model_blackbox
+
+def get_features(model, data_loader, datasetName,type,early_break=-1,transform=None):
+    if type=='Test':
+        bbModel=prepareBB(datasetName,transform)
+        steps=10
+        eps=1/255
+        attack=torchattacks.PGD(bbModel, eps=eps, steps=steps, alpha=2.5 * eps / steps)
+
     pretrained_features = []
-    for i, (data, _) in enumerate(tqdm(data_loader)):
+    for i, (data, lbl) in enumerate(tqdm(data_loader)):
         if early_break > 0 and early_break < i:
             break
 
+        data=attack(data,lbl)
+        
         encoded_outputs = model(data.to('cuda'))
         pretrained_features.append(encoded_outputs.detach().cpu().numpy())
 
@@ -233,13 +356,16 @@ def extract_fetures(base_path,
                 if calculate_features or not os.path.exists(
                         join(extracted_features_path, 'train_pretrained_ViT_features.npy')):
                     if output_train_features:
-                        train_features = get_features(model=model, data_loader=trainsetLoader)
+                        train_features = get_features(model=model, data_loader=trainsetLoader,type='Train',datasetName=dataset,transform=val_transforms)
+                        
+                        
                         with open(join(extracted_features_path,
                                        'train_pretrained_ViT_features.npy'), 'wb') as f:
                             np.save(f, train_features)
 
                     if output_test_features:
-                        test_features = get_features(model=model, data_loader=testsetLoader)
+                        test_features = get_features(model=model, data_loader=testsetLoader,type='Test',datasetName=dataset,transform=val_transforms)
+                        
                         with open(join(extracted_features_path,
                                        'test_pretrained_ViT_features.npy'), 'wb') as f:
                             np.save(f, test_features)
