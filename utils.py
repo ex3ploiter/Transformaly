@@ -675,9 +675,9 @@ def get_datasets(dataset, data_path, val_transforms):
         testset = ImageFolder(root='../Testing', transform=val_transforms)
 
     elif dataset == 'X-ray':
-        trainset = ImageFolder(root='../chest_xray/train', transform=val_transforms)
+        trainset = ImageFolder(root='/mnt/new_drive/Sepehr/chest_xray/train', transform=val_transforms)
         
-        testset = ImageFolder(root='../chest_xray/test', transform=val_transforms)        
+        testset = ImageFolder(root='/mnt/new_drive/Sepehr/chest_xray/test', transform=val_transforms)        
                 
 
     else:
