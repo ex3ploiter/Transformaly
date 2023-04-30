@@ -15,7 +15,7 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 from PIL import Image
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score,accuracy_score
 import faiss
 import matplotlib.pyplot as plt
 import torch
@@ -143,7 +143,13 @@ class BB_Model(torch.nn.Module):
         z1=self.fc1(z1)
         return z1
     
-def get_loaders_blackbox(dataset, batch_size=32,transform):
+def get_loaders_blackbox(dataset, batch_size=32,transform=None):
+    
+    transform = Compose([
+                                transforms.Resize((224, 224)),
+                                transforms.Grayscale(num_output_channels=3),
+                                transforms.ToTensor()
+                            ])    
     
     if dataset == "BrainMRI" : # 2
         path1='/mnt/new_drive/Masoud_WorkDir/MeanShift_Tests/Training'
@@ -185,18 +191,19 @@ def prepareBB(datasetName,transform):
     return model_blackbox
 
 def get_features(model, data_loader, datasetName,type,early_break=-1,transform=None):
-    if type=='Test':
-        bbModel=prepareBB(datasetName,transform)
-        steps=10
-        eps=1/255
-        attack=torchattacks.PGD(bbModel, eps=eps, steps=steps, alpha=2.5 * eps / steps)
+    # if type=='Test':
+    #     bbModel=prepareBB(datasetName,transform)
+    #     steps=10
+    #     eps=1/255
+    #     attack=torchattacks.PGD(bbModel, eps=eps, steps=steps, alpha=2.5 * eps / steps)
 
     pretrained_features = []
     for i, (data, lbl) in enumerate(tqdm(data_loader)):
         if early_break > 0 and early_break < i:
             break
 
-        data=attack(data,lbl)
+        # if type=='Test':
+        #     data=attack(data,lbl)
         
         encoded_outputs = model(data.to('cuda'))
         pretrained_features.append(encoded_outputs.detach().cpu().numpy())
@@ -592,7 +599,7 @@ def train(model, best_model, args, dataloaders,
                                                   data_path = args['data_path'],
                                                   one_vs_rest=args['unimodal'],
                                                   _class=args['_class'],
-                                                  normal_test_sample_only=False,
+                                                  normal_test_sample_only=True,
                                                   use_imagenet=args['use_imagenet']
                                                   )
 
@@ -812,8 +819,11 @@ def get_datasets(dataset, data_path, val_transforms):
 
 
     elif dataset == 'Head-CT':
-        trainset = ImageFolder(root='../head_ct/Train/', transform=val_transforms)
-        testset = ImageFolder(root='../head_ct/Test/', transform=val_transforms)        
+        path1='/mnt/new_drive/Masoud_WorkDir/Head-CT/TrainWithAnomal/Train'
+        path2='/mnt/new_drive/Masoud_WorkDir/Head-CT/TrainWithAnomal/Test'
+
+        trainset = ImageFolder(root=path1, transform=val_transforms)
+        testset = ImageFolder(root=path2, transform=val_transforms)        
 
         
 

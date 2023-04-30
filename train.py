@@ -125,7 +125,7 @@ if __name__ == '__main__':
                                                  data_path=args['data_path'],
                                                  one_vs_rest=args['unimodal'],
                                                  _class=args['_class'],
-                                                 normal_test_sample_only=False,
+                                                 normal_test_sample_only=True,
                                                  use_imagenet=args['use_imagenet']
                                                  )
 
@@ -133,7 +133,7 @@ if __name__ == '__main__':
                                                data_path=args['data_path'],
                                                one_vs_rest=not args['unimodal'],
                                                _class=args['_class'],
-                                               normal_test_sample_only=False,
+                                               normal_test_sample_only=True,
                                                use_imagenet=args['use_imagenet']
                                                )
 
