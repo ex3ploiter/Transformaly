@@ -6,8 +6,14 @@ from scipy.fftpack import dct, idct
 
 # mean and std for different datasets
 IMAGENET_SIZE = 224
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD = [0.229, 0.224, 0.225]
+# IMAGENET_MEAN = [0.485, 0.456, 0.406]
+# IMAGENET_STD = [0.229, 0.224, 0.225]
+
+IMAGENET_MEAN = [0.5, 0.5, 0.5]
+IMAGENET_STD = [0.5, 0.5, 0.5]
+
+
+
 IMAGENET_TRANSFORM = trans.Compose([
     trans.Resize(256),
     trans.CenterCrop(224),

@@ -73,51 +73,7 @@ def knn_score(train_set, test_set, n_neighbours=2):
 
 
 
-def train_model_blackbox(epoch, model, trainloader, device): 
-    model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-    criterion = nn.CrossEntropyLoss()
 
-    soft = torch.nn.Softmax(dim=1)
-
-    preds = []
-    anomaly_scores = []
-    true_labels = []
-    running_loss = 0
-    accuracy = 0
-
-    
-    with tqdm(trainloader, unit="batch") as tepoch:
-        torch.cuda.empty_cache()
-        for i, (data, targets) in enumerate(tepoch):
-            tepoch.set_description(f"Epoch {epoch + 1}")
-            data, targets = data.to(device), targets.to(device)
-
-            optimizer.zero_grad()
-
-            outputs = model(data)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
-
-            true_labels += targets.detach().cpu().numpy().tolist()
-
-            predictions = outputs.argmax(dim=1, keepdim=True).squeeze()
-            preds += predictions.detach().cpu().numpy().tolist()
-            correct = (torch.tensor(preds) == torch.tensor(true_labels)).sum().item()
-            accuracy = correct / len(preds)
-
-            probs = soft(outputs).squeeze()
-            anomaly_scores += probs[:, 1].detach().cpu().numpy().tolist()
-
-            running_loss += loss.item() * data.size(0)
-
-            tepoch.set_postfix(loss=running_loss / len(preds), accuracy=100. * accuracy)
-
-        print("AUC : ",roc_auc_score(true_labels, anomaly_scores) )
-        print("accuracy_score : ",accuracy_score(true_labels, preds, normalize=True) )
-
-    return  model
 
 
 

@@ -16,6 +16,11 @@ from utils import print_and_add_to_log, get_datasets_for_ViT, \
     Identity, get_finetuned_features
 from pytorch_pretrained_vit.model import AnomalyViT
 from torch import nn
+from tqdm import tqdm
+from simba import *
+import faiss
+from pytorch_pretrained_vit.model import AnomalyViT, ViT
+
 
 def arg_prse():
     parser = argparse.ArgumentParser(description='')
@@ -35,39 +40,155 @@ def arg_prse():
 
     return   args  
 
+
+def get_features(model, data_loader, early_break=-1):
+    pretrained_features = []
+    for i, (data, _) in enumerate(tqdm(data_loader)):
+        if early_break > 0 and early_break < i:
+            break
+
+        encoded_outputs = model(data.to('cuda'))
+        pretrained_features.append(encoded_outputs.detach().cpu().numpy())
+
+    pretrained_features = np.concatenate(pretrained_features)
+    return pretrained_features
+
 def load_model(model_path,VIT_MODEL_NAME):
-    model_checkpoint_path = join(model_path, 'best_full_finetuned_model_state_dict.pkl')
-    model = AnomalyViT(VIT_MODEL_NAME, pretrained=True)
+    # model = AnomalyViT(VIT_MODEL_NAME, pretrained=True)
+    # model.fc = Identity()
+    # model.to('cuda')
+
+    # model_checkpoint_path = join(model_path, 'last_full_finetuned_model_state_dict.pkl')
+    # if os.path.exists(model_checkpoint_path):
+    #     model_state_dict = torch.load(model_checkpoint_path)
+    #     model.load_state_dict(model_state_dict)
+
+    model = ViT('B_16_imagenet1k', pretrained=True)
     model.fc = Identity()
-    model_state_dict = torch.load(model_checkpoint_path)
-    ret = model.load_state_dict(model_state_dict)
-    print_and_add_to_log(
-        'Missing keys when loading pretrained weights: {}'.format(ret.missing_keys),
-        logging)
-    print_and_add_to_log(
-        'Unexpected keys when loading pretrained weights: {}'.format(ret.unexpected_keys),
-        logging)
-    print_and_add_to_log("model loadded from checkpoint here:", logging)
-    print_and_add_to_log(model_checkpoint_path, logging)
-    model = model.to('cuda')
-    model.eval()
+    model.eval()    
+    model.cuda()
+
+
     return model
 
+
+def get_score_adv( test_loader,train_features,model):
+    model.cuda()
+    x_model=Wrap_Model_1(model=model,train_features=train_features)    
+    
+    t=[]
+    l = []
+    image_size = 384
+    attack = SimBA(x_model, 'imagenet', image_size)
+    
+    for batch_idx, (imgs, labels) in enumerate(tqdm(test_loader)):
+        imgs = imgs.to('cuda')
+        labels = labels.to('cuda')
+        
+        imgs, _, _, _, _, _ = attack.simba_batch(
+                imgs, labels, 1, 384, 7, 2/255, linf_bound=0,
+                order='rand', targeted=False, pixel_attack=True, log_every=0)
+        t.append(x_model(imgs))
+        l.append(labels)
+
+    t = np.concatenate(t)
+    l = torch.cat(l).cpu().detach().numpy()
+        
+    auc=roc_auc_score(l, t)
+    
+    print("ADV AUC: ",auc)
+
+    return auc
+
+
 def main():
-    args=arg_prse()
+    args=arg_prse()    
+    if args['dataset'] == 'BrainMRI':
+        _class=2 
+
+    elif  args['dataset'] == 'X-ray':
+         _class=0  
+
+    elif  args['dataset'] == 'Head-CT':
+        _class=1     
+    args['_class'] = _class
+
     BASE_PATH = 'experiments'
     base_feature_path = join(
         BASE_PATH,
         f'{"unimodal" if args["unimodal"] else "multimodal"}/{args["dataset"]}/class_{_class}')    
     model_path = join(base_feature_path, 'model')
-    model=load_model()
+    VIT_MODEL_NAME = 'B_16_imagenet1k'
+    model=load_model(model_path,VIT_MODEL_NAME)
+
+    
+    with open(join(BASE_PATH, f'{"unimodal" if args["unimodal"] else "multimodal"}',
+                    f'{args["dataset"]}/class_{args["_class"]}/extracted_features',
+                    'train_pretrained_ViT_features.npy'), 'rb') as f:
+        train_features = np.load(f)    
+    
+    trainset, testset = get_datasets_for_ViT(dataset=args['dataset'],
+                                                data_path=args['data_path'],
+                                                one_vs_rest=args['unimodal'],
+                                                _class=args['_class'],
+                                                normal_test_sample_only=False,
+                                                use_imagenet=args['use_imagenet'],
+                                                )
+
+    # print(testset[0][0].shape)
+
+    test_loader = torch.utils.data.DataLoader(testset,
+                                                batch_size=args['batch_size'],
+                                                shuffle=False)    
     
 
-class Wrap_Model(torch.nn.Module):
-    def __init__(self, train_finetuned_features, test_finetuned_features,model,gmm=None):
+    
+    
+    # x_model=Wrap_Model_1(model=model)    
+    
+
+    get_score_adv(test_loader=test_loader,train_features=train_features,model=model)
+
+
+
+
+
+class Wrap_Model_1(torch.nn.Module):
+    def __init__(self, model,train_features):
         super().__init__()
 
-        self.train_finetuned_features=train_finetuned_features
+        self.train_features=train_features
+        
+        
+        self.model=model
+        self.model = self.model.eval()
+
+    def knn_score(self,train_set, test_set, n_neighbours=2):
+        """
+        Calculates the KNN distance
+        """
+        index = faiss.IndexFlatL2(train_set.shape[1])
+        index.add(train_set)
+        dist, _ = index.search(test_set, n_neighbours)
+        return np.sum(dist, axis=1)
+
+    def get_features(self,model, data):        
+    
+        encoded_outputs = model(data.to('cuda'))
+        return encoded_outputs.detach().cpu().numpy()
+    
+    def forward(self, input):
+        test_features=self.get_features(self.model,input)
+        distances = self.knn_score(self.train_features, test_features, n_neighbours=2)
+
+        return distances        
+        
+
+class Wrap_Model_2(torch.nn.Module):
+    def __init__(self, model,gmm=None):
+        super().__init__()
+
+        # self.train_finetuned_features=train_finetuned_features
         # self.test_finetuned_features=test_finetuned_features
         self.gmm=gmm
         self.model=model
@@ -107,3 +228,6 @@ class Wrap_Model(torch.nn.Module):
         test_finetuned_samples_likelihood=self.gmm.score_samples(test_finetuned_features)
 
         return test_finetuned_samples_likelihood        
+    
+    
+main()    
