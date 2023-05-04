@@ -42,13 +42,6 @@ if __name__ == '__main__':
         _classes = range(2)
     elif args['dataset'] == 'dior':
         _classes = range(19)
-    elif args['dataset'] == 'BrainMRI':
-        _classes = range(4)
-    
-    elif args['dataset'] == 'X-ray':
-        _classes = range(2)
-
-
     else:
         raise ValueError(f"Does not support the {args['dataset']} dataset")
 
